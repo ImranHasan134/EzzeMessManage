@@ -1,0 +1,223 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:740230323287479855",
+      "lastPropertyId": "6:4279218504094721591",
+      "name": "BazarEntry",
+      "properties": [
+        {
+          "id": "1:4612780976459851537",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6589230579631983682",
+          "name": "amount",
+          "type": 8
+        },
+        {
+          "id": "3:7356350569760268941",
+          "name": "note",
+          "type": 9
+        },
+        {
+          "id": "4:2360629371915086866",
+          "name": "category",
+          "type": 9
+        },
+        {
+          "id": "5:4776119724427859936",
+          "name": "date",
+          "type": 10
+        },
+        {
+          "id": "6:4279218504094721591",
+          "name": "monthId",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:7927114863390373332",
+      "lastPropertyId": "5:5422120667833500387",
+      "name": "MealEntry",
+      "properties": [
+        {
+          "id": "1:3915013264651188286",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:429568086495976715",
+          "name": "memberId",
+          "type": 6
+        },
+        {
+          "id": "3:1607890485219976871",
+          "name": "count",
+          "type": 6
+        },
+        {
+          "id": "4:5201958651177109282",
+          "name": "date",
+          "type": 10
+        },
+        {
+          "id": "5:5422120667833500387",
+          "name": "monthId",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:7243923060690246910",
+      "lastPropertyId": "7:7177452149058422318",
+      "name": "Member",
+      "properties": [
+        {
+          "id": "1:7876131625999066116",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3246853045866015014",
+          "name": "name",
+          "type": 9
+        },
+        {
+          "id": "3:2535553284834305609",
+          "name": "initials",
+          "type": 9
+        },
+        {
+          "id": "4:3815924620290975885",
+          "name": "avatarColor",
+          "type": 9
+        },
+        {
+          "id": "5:7344541102709676482",
+          "name": "isActive",
+          "type": 1
+        },
+        {
+          "id": "6:583086586540456855",
+          "name": "joinedMonthId",
+          "type": 9
+        },
+        {
+          "id": "7:7177452149058422318",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "4:6812378176094233437",
+      "lastPropertyId": "7:4272243977907168170",
+      "name": "OtherCost",
+      "properties": [
+        {
+          "id": "1:4561705398659017155",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3159621226226788403",
+          "name": "memberId",
+          "type": 6
+        },
+        {
+          "id": "3:6884216723432152691",
+          "name": "amount",
+          "type": 8
+        },
+        {
+          "id": "4:9054306635361362919",
+          "name": "category",
+          "type": 9
+        },
+        {
+          "id": "5:2873148344280119084",
+          "name": "note",
+          "type": 9
+        },
+        {
+          "id": "6:7594165227018382808",
+          "name": "date",
+          "type": 10
+        },
+        {
+          "id": "7:4272243977907168170",
+          "name": "monthId",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "5:7216062852827631512",
+      "lastPropertyId": "7:3003307600033182728",
+      "name": "Payment",
+      "properties": [
+        {
+          "id": "1:3331544807165476299",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6063196303353159577",
+          "name": "memberId",
+          "type": 6
+        },
+        {
+          "id": "3:4428480936144859339",
+          "name": "amount",
+          "type": 8
+        },
+        {
+          "id": "4:7150651432773044233",
+          "name": "method",
+          "type": 9
+        },
+        {
+          "id": "5:6390143879499803441",
+          "name": "note",
+          "type": 9
+        },
+        {
+          "id": "6:6038522804417990069",
+          "name": "date",
+          "type": 10
+        },
+        {
+          "id": "7:3003307600033182728",
+          "name": "monthId",
+          "type": 9
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "5:7216062852827631512",
+  "lastIndexId": "0:0",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}
