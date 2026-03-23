@@ -1699,6 +1699,7 @@ class _BazarScreenState extends State<BazarScreen> {
   DateTime _date    = DateTime.now();
   List<BazarEntry> _entries = [];
   double _total = 0;
+  bool _showCalendar = false;
 
   static const _categories = [
     'General', 'Rice', 'Oil', 'Fish/Meat',
@@ -1728,8 +1729,13 @@ class _BazarScreenState extends State<BazarScreen> {
   }
 
   void _save() {
-    final amount = double.tryParse(_amountCtrl.text);
-    if (amount == null || amount <= 0) return;
+    final amount = double.tryParse(_amountCtrl.text.trim());
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Enter a valid amount'),
+          backgroundColor: Colors.red));
+      return;
+    }
     _db.saveBazar(BazarEntry(
       amount: amount,
       note: _noteCtrl.text.trim(),
@@ -1744,86 +1750,158 @@ class _BazarScreenState extends State<BazarScreen> {
         const SnackBar(content: Text('Bazar entry added!')));
   }
 
+  // Total bazar cost on a specific day
+  double _totalOnDay(int day) {
+    final year  = int.parse(widget.monthId.split('-')[0]);
+    final month = int.parse(widget.monthId.split('-')[1]);
+    return _entries
+        .where((e) =>
+    e.date.year == year &&
+        e.date.month == month &&
+        e.date.day == day)
+        .fold(0.0, (s, e) => s + e.amount);
+  }
+
+  // Entries on a specific day
+  List<BazarEntry> _entriesOnDay(int day) {
+    final year  = int.parse(widget.monthId.split('-')[0]);
+    final month = int.parse(widget.monthId.split('-')[1]);
+    return _entries
+        .where((e) =>
+    e.date.year == year &&
+        e.date.month == month &&
+        e.date.day == day)
+        .toList();
+  }
+
+  int _daysInMonth() {
+    final year  = int.parse(widget.monthId.split('-')[0]);
+    final month = int.parse(widget.monthId.split('-')[1]);
+    return DateTime(year, month + 1, 0).day;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Bazar / expenses')),
-      body: ListView(padding: const EdgeInsets.all(14), children: [
-        Row(children: [
-          Expanded(
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Total bazar',
-                          style: TextStyle(
-                              fontSize: 11, color: Colors.grey)),
-                      Text('৳${_total.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold)),
-                    ]),
+      appBar: AppBar(
+        title: const Text('Bazar / expenses'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              icon: Icon(
+                  _showCalendar ? Icons.list_rounded : Icons.grid_view_rounded,
+                  size: 18),
+              label: Text(_showCalendar ? 'Entry' : 'Calendar'),
+              onPressed: () =>
+                  setState(() => _showCalendar = !_showCalendar),
+            ),
+          ),
+        ],
+      ),
+      body: _showCalendar ? _buildCalendarView() : _buildEntryView(),
+    );
+  }
+
+  // ── ENTRY VIEW ───────────────────────────────────────────
+  Widget _buildEntryView() {
+    return ListView(padding: const EdgeInsets.all(14), children: [
+      // Summary card
+      Row(children: [
+        Expanded(
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Total bazar this month',
+                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const SizedBox(height: 4),
+                        Text('৳${_total.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                                fontSize: 26, fontWeight: FontWeight.bold)),
+                      ]),
+                  Text('${_entries.length} entries',
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.grey)),
+                ],
               ),
             ),
           ),
-        ]),
-        const SizedBox(height: 8),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.calendar_today_rounded),
-                title: Text(
-                    '${_date.day}/${_date.month}/${_date.year}'),
-                onTap: () async {
-                  final d = await showDatePicker(
-                      context: context,
-                      initialDate: _date,
-                      firstDate: DateTime(2024),
-                      lastDate: DateTime.now());
-                  if (d != null) setState(() => _date = d);
-                },
-              ),
-              TextField(
-                controller: _amountCtrl,
-                keyboardType: TextInputType.number,
-                decoration:
-                const InputDecoration(labelText: 'Amount (৳)'),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration:
-                const InputDecoration(labelText: 'Category'),
-                items: _categories
-                    .map((c) =>
-                    DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) =>
-                    setState(() => _category = v ?? 'General'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _noteCtrl,
-                decoration: const InputDecoration(
-                    labelText: 'Note (optional)'),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                    onPressed: _save,
-                    child: const Text('Add bazar entry')),
-              ),
-            ]),
-          ),
         ),
-        const SizedBox(height: 16),
-        Text('This month',
+      ]),
+      const SizedBox(height: 10),
+
+      // Add entry form
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(children: [
+            // Date row
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.calendar_today_rounded),
+              title: Text(
+                '${_date.day} / ${_date.month} / ${_date.year}',
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+              subtitle: const Text('Tap to change date'),
+              onTap: () async {
+                final d = await showDatePicker(
+                    context: context,
+                    initialDate: _date,
+                    firstDate: DateTime(2024),
+                    lastDate: DateTime.now());
+                if (d != null) setState(() => _date = d);
+              },
+            ),
+            const Divider(height: 8),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _amountCtrl,
+              keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                  labelText: 'Amount (৳)',
+                  prefixText: '৳ '),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _category,
+              decoration: const InputDecoration(labelText: 'Category'),
+              items: _categories
+                  .map((c) =>
+                  DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (v) =>
+                  setState(() => _category = v ?? 'General'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _noteCtrl,
+              decoration: const InputDecoration(
+                  labelText: 'Note (e.g. Rice 5kg, Oil 2L)'),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Add bazar entry'),
+                  onPressed: _save),
+            ),
+          ]),
+        ),
+      ),
+      const SizedBox(height: 16),
+
+      // Entry list
+      if (_entries.isNotEmpty) ...[
+        Text('This month — ${_entries.length} entries',
             style: Theme.of(context)
                 .textTheme
                 .titleSmall
@@ -1832,18 +1910,37 @@ class _BazarScreenState extends State<BazarScreen> {
         ..._entries.map((e) => Card(
           margin: const EdgeInsets.only(bottom: 6),
           child: ListTile(
-            title: Text(e.category),
+            leading: CircleAvatar(
+              backgroundColor:
+              Theme.of(context).colorScheme.primaryContainer,
+              radius: 20,
+              child: Text(
+                e.category.substring(0, 1),
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onPrimaryContainer),
+              ),
+            ),
+            title: Text(e.category,
+                style:
+                const TextStyle(fontWeight: FontWeight.w500)),
             subtitle: Text(
-                '${e.date.day}/${e.date.month} · ${e.note}'),
+                '${e.date.day}/${e.date.month}/${e.date.year}'
+                    '${e.note.isNotEmpty ? "  ·  ${e.note}" : ""}',
+                style: const TextStyle(fontSize: 12)),
             trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('৳${e.amount.toStringAsFixed(0)}',
                       style: const TextStyle(
-                          fontWeight: FontWeight.w600)),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
                   IconButton(
                       icon: const Icon(Icons.delete_outline,
-                          size: 18),
+                          size: 18, color: Colors.red),
                       onPressed: () {
                         _db.deleteBazar(e.id);
                         _load();
@@ -1851,7 +1948,238 @@ class _BazarScreenState extends State<BazarScreen> {
                 ]),
           ),
         )),
-      ]),
+      ] else
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(
+              child: Column(children: [
+                Icon(Icons.shopping_basket_outlined,
+                    size: 40, color: Colors.grey.withOpacity(0.5)),
+                const SizedBox(height: 8),
+                const Text('No bazar entries yet',
+                    style: TextStyle(color: Colors.grey)),
+                const Text('Add your first bazar cost above',
+                    style:
+                    TextStyle(fontSize: 12, color: Colors.grey)),
+              ]),
+            ),
+          ),
+        ),
+    ]);
+  }
+
+  // ── CALENDAR VIEW ────────────────────────────────────────
+  Widget _buildCalendarView() {
+    final theme = Theme.of(context);
+    final days = _daysInMonth();
+    final isDark = theme.brightness == Brightness.dark;
+    final headerBg = const Color(0xFF1a1a2e);
+    final altRowBg = isDark
+        ? Colors.white.withOpacity(0.03)
+        : Colors.black.withOpacity(0.02);
+    final borderColor = isDark
+        ? Colors.white.withOpacity(0.1)
+        : Colors.black.withOpacity(0.08);
+    final year  = int.parse(widget.monthId.split('-')[0]);
+    final month = int.parse(widget.monthId.split('-')[1]);
+
+    return Column(children: [
+      // Total banner at top
+      Container(
+        width: double.infinity,
+        color: headerBg,
+        padding:
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Monthly bazar total',
+                style: TextStyle(color: Colors.white70, fontSize: 13)),
+            Text('৳${_total.toStringAsFixed(0)}',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+
+      // Calendar grid
+      Expanded(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(12),
+          child: Table(
+            border: TableBorder.all(color: borderColor, width: 0.5),
+            columnWidths: const {
+              0: FixedColumnWidth(80),
+              1: FlexColumnWidth(1),
+              2: FixedColumnWidth(80),
+            },
+            children: [
+              // Header
+              TableRow(
+                decoration: BoxDecoration(color: headerBg),
+                children: [
+                  _calCell('Date', isHeader: true),
+                  _calCell('Items', isHeader: true),
+                  _calCell('Amount', isHeader: true),
+                ],
+              ),
+
+              // Day rows — only show days that have entries OR all days
+              ...List.generate(days, (i) {
+                final day = i + 1;
+                final date = DateTime(year, month, day);
+                final weekday = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+                [date.weekday - 1];
+                final isFriday = date.weekday == 5;
+                final dayEntries = _entriesOnDay(day);
+                final dayTotal = _totalOnDay(day);
+                final hasEntries = dayEntries.isNotEmpty;
+
+                // Skip empty days to keep calendar compact
+                if (!hasEntries) {
+                  final rowBg = isFriday
+                      ? Colors.orange.withOpacity(isDark ? 0.1 : 0.06)
+                      : i.isOdd ? altRowBg : null;
+                  return TableRow(
+                    decoration: rowBg != null
+                        ? BoxDecoration(color: rowBg)
+                        : null,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 7),
+                        child: Text(
+                          '$day $weekday',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: isFriday
+                                  ? Colors.orange.shade700
+                                  : theme.textTheme.bodySmall?.color),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 7),
+                        child: Text('—',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color:
+                                Colors.grey.withOpacity(0.4))),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 7),
+                        child: Text('—',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color:
+                                Colors.grey.withOpacity(0.4)),
+                            textAlign: TextAlign.right),
+                      ),
+                    ],
+                  );
+                }
+
+                // Day with entries — green highlight
+                return TableRow(
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(isDark ? 0.1 : 0.06),
+                  ),
+                  children: [
+                    // Date cell
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _date = DateTime(year, month, day);
+                          _showCalendar = false;
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 7),
+                        child: Text(
+                          '$day $weekday',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isFriday
+                                  ? Colors.orange.shade700
+                                  : theme.textTheme.bodyMedium?.color),
+                        ),
+                      ),
+                    ),
+                    // Items cell — show category list
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 6),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: dayEntries
+                            .map((e) => Padding(
+                          padding:
+                          const EdgeInsets.only(bottom: 2),
+                          child: Text(
+                            '• ${e.category}'
+                                '${e.note.isNotEmpty ? ": ${e.note}" : ""}',
+                            style: const TextStyle(fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ))
+                            .toList(),
+                      ),
+                    ),
+                    // Amount cell
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 7),
+                      child: Text(
+                        '৳${dayTotal.toStringAsFixed(0)}',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade700),
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  ],
+                );
+              }),
+
+              // Total row
+              TableRow(
+                decoration: BoxDecoration(color: headerBg),
+                children: [
+                  _calCell('Total', isHeader: true),
+                  _calCell(
+                      '${_entries.length} entries', isHeader: true),
+                  _calCell('৳${_total.toStringAsFixed(0)}',
+                      isHeader: true),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _calCell(String text, {bool isHeader = false}) {
+    return Padding(
+      padding:
+      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight:
+          isHeader ? FontWeight.bold : FontWeight.normal,
+          color: isHeader ? Colors.white : null,
+        ),
+      ),
     );
   }
 }
@@ -1872,13 +2200,24 @@ class _OtherCostScreenState extends State<OtherCostScreen> {
   final _amountCtrl = TextEditingController();
   final _noteCtrl   = TextEditingController();
   List<Member> _members     = [];
-  int? _selectedMemberId;   // use ID not object — avoids == comparison issues
+  int? _selectedMemberId;
   String _category          = 'Rent';
   List<OtherCost> _entries  = [];
+  bool _showSummary         = false;
 
   static const _categories = [
-    'Rent', 'Rent(20)', 'Bill(70)', 'Bill(250)', 'Bill(300)', 'Bill(500)', 'Other'
+    'Rent', 'Trash', 'Wifi', 'Gas', 'Electricity', 'Khala', 'Other'
   ];
+
+  static const _categoryIcons = {
+    'Rent':        Icons.home_outlined,
+    'Trash':       Icons.delete_outline,
+    'Wifi':        Icons.wifi_rounded,
+    'Gas':         Icons.local_fire_department_outlined,
+    'Electricity': Icons.bolt_outlined,
+    'Khala':       Icons.person_outline,
+    'Other':       Icons.more_horiz_rounded,
+  };
 
   @override
   void initState() {
@@ -1899,7 +2238,6 @@ class _OtherCostScreenState extends State<OtherCostScreen> {
       ..sort((a, b) => b.date.compareTo(a.date));
     setState(() {
       _members = members;
-      // Set default selection to first member if not yet set or invalid
       if (_selectedMemberId == null ||
           !members.any((m) => m.id == _selectedMemberId)) {
         _selectedMemberId = members.isNotEmpty ? members.first.id : null;
@@ -1937,98 +2275,289 @@ class _OtherCostScreenState extends State<OtherCostScreen> {
         .showSnackBar(const SnackBar(content: Text('Cost added!')));
   }
 
+  // ── Summary helpers ──────────────────────────────────────
+
+  /// Total of a specific category across all members
+  double _categoryTotal(String cat) => _entries
+      .where((e) => e.category == cat)
+      .fold(0.0, (s, e) => s + e.amount);
+
+  /// Total cost for a specific member
+  double _memberTotal(int memberId) => _entries
+      .where((e) => e.memberId == memberId)
+      .fold(0.0, (s, e) => s + e.amount);
+
+  /// Per-member breakdown for a given category
+  Map<int, double> _memberCategoryBreakdown(String cat) {
+    final map = <int, double>{};
+    for (final e in _entries.where((e) => e.category == cat)) {
+      map[e.memberId] = (map[e.memberId] ?? 0) + e.amount;
+    }
+    return map;
+  }
+
+  double get _grandTotal => _entries.fold(0.0, (s, e) => s + e.amount);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Other costs')),
-      body: ListView(padding: const EdgeInsets.all(14), children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: [
-              if (_members.isNotEmpty)
-                DropdownButtonFormField<int>(
-                  value: _selectedMemberId,
-                  decoration: const InputDecoration(
-                      labelText: 'Assign to member'),
-                  items: _members
-                      .map((m) => DropdownMenuItem(
-                      value: m.id, child: Text(m.name)))
-                      .toList(),
-                  onChanged: (v) =>
-                      setState(() => _selectedMemberId = v),
-                ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration:
-                const InputDecoration(labelText: 'Category'),
-                items: _categories
-                    .map((c) =>
-                    DropdownMenuItem(value: c, child: Text(c)))
+      appBar: AppBar(
+        title: const Text('Other costs'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              icon: Icon(
+                _showSummary ? Icons.list_rounded : Icons.bar_chart_rounded,
+                size: 18,
+              ),
+              label: Text(_showSummary ? 'Entry' : 'Summary'),
+              onPressed: () => setState(() => _showSummary = !_showSummary),
+            ),
+          ),
+        ],
+      ),
+      body: _showSummary ? _buildSummaryView() : _buildEntryView(),
+    );
+  }
+
+  // ── ENTRY VIEW (unchanged) ───────────────────────────────
+  Widget _buildEntryView() {
+    return ListView(padding: const EdgeInsets.all(14), children: [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(children: [
+            if (_members.isNotEmpty)
+              DropdownButtonFormField<int>(
+                value: _selectedMemberId,
+                decoration: const InputDecoration(labelText: 'Assign to member'),
+                items: _members
+                    .map((m) => DropdownMenuItem(value: m.id, child: Text(m.name)))
                     .toList(),
-                onChanged: (v) =>
-                    setState(() => _category = v ?? 'Rent'),
+                onChanged: (v) => setState(() => _selectedMemberId = v),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _amountCtrl,
-                keyboardType: TextInputType.number,
-                decoration:
-                const InputDecoration(labelText: 'Amount (৳)'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _noteCtrl,
-                decoration: const InputDecoration(
-                    labelText: 'Note (optional)'),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                    onPressed: _save,
-                    child: const Text('Add cost')),
-              ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: _category,
+              decoration: const InputDecoration(labelText: 'Category'),
+              items: _categories
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (v) => setState(() => _category = v ?? 'Rent'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _amountCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Amount (৳)'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _noteCtrl,
+              decoration: const InputDecoration(labelText: 'Note (optional)'),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(onPressed: _save, child: const Text('Add cost')),
+            ),
+          ]),
+        ),
+      ),
+      const SizedBox(height: 16),
+      Text('This month',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey)),
+      const SizedBox(height: 8),
+      ..._entries.map((e) {
+        final member = _members.firstWhere(
+                (m) => m.id == e.memberId,
+            orElse: () => Member(name: 'Unknown', initials: '?'));
+        return Card(
+          margin: const EdgeInsets.only(bottom: 6),
+          child: ListTile(
+            title: Text('${member.name} · ${e.category}'),
+            subtitle: Text('${e.date.day}/${e.date.month} · ${e.note}'),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('৳${e.amount.toStringAsFixed(0)}',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  onPressed: () { _db.deleteCost(e.id); _load(); }),
             ]),
           ),
+        );
+      }),
+    ]);
+  }
+
+  // ── SUMMARY VIEW ─────────────────────────────────────────
+  Widget _buildSummaryView() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return ListView(padding: const EdgeInsets.all(14), children: [
+
+      // ── Grand total banner ──
+      Card(
+        color: const Color(0xFF1a1a2e),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total other costs',
+                  style: TextStyle(color: Colors.white70, fontSize: 13)),
+              Text('৳${_grandTotal.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
-        Text('This month',
-            style: Theme.of(context)
-                .textTheme
-                .titleSmall
-                ?.copyWith(color: Colors.grey)),
-        const SizedBox(height: 8),
-        ..._entries.map((e) {
-          final member = _members.firstWhere(
-                  (m) => m.id == e.memberId,
-              orElse: () => Member(name: 'Unknown', initials: '?'));
-          return Card(
-            margin: const EdgeInsets.only(bottom: 6),
-            child: ListTile(
-              title: Text('${member.name} · ${e.category}'),
-              subtitle: Text(
-                  '${e.date.day}/${e.date.month} · ${e.note}'),
-              trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+      ),
+      const SizedBox(height: 16),
+
+      // ── Per-member totals ──
+      Text('BY MEMBER',
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: Colors.grey, letterSpacing: 1)),
+      const SizedBox(height: 8),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Column(
+            children: _members.map((m) {
+              final total = _memberTotal(m.id);
+              final pct = _grandTotal > 0 ? total / _grandTotal : 0.0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('৳${e.amount.toStringAsFixed(0)}',
+                    Row(children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: theme.colorScheme.primaryContainer,
+                        child: Text(m.initials,
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: theme.colorScheme.onPrimaryContainer)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(m.name,
+                          style: const TextStyle(fontWeight: FontWeight.w500))),
+                      Text('৳${total.toStringAsFixed(0)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ]),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: pct,
+                        minHeight: 6,
+                        backgroundColor: isDark
+                            ? Colors.white.withOpacity(0.08)
+                            : Colors.black.withOpacity(0.06),
+                      ),
+                    ),
+                    // Per-category chips for this member
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: _categories
+                          .where((cat) => _entries.any(
+                              (e) => e.memberId == m.id && e.category == cat))
+                          .map((cat) {
+                        final amt = _entries
+                            .where((e) => e.memberId == m.id && e.category == cat)
+                            .fold(0.0, (s, e) => s + e.amount);
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primaryContainer
+                                .withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Text('$cat ৳${amt.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: theme.colorScheme.onPrimaryContainer)),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
+
+      // ── Per-category breakdown table ──
+      Text('BY CATEGORY',
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: Colors.grey, letterSpacing: 1)),
+      const SizedBox(height: 8),
+      Card(
+        child: Column(
+          children: _categories.map((cat) {
+            final total = _categoryTotal(cat);
+            if (total == 0) return const SizedBox.shrink();
+            final breakdown = _memberCategoryBreakdown(cat);
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  child: Row(children: [
+                    Icon(_categoryIcons[cat] ?? Icons.receipt_outlined,
+                        size: 20,
+                        color: theme.colorScheme.primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(cat,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 14)),
+                          // Show which members contributed
+                          Wrap(
+                            spacing: 4,
+                            children: breakdown.entries.map((entry) {
+                              final member = _members.firstWhere(
+                                      (m) => m.id == entry.key,
+                                  orElse: () =>
+                                      Member(name: '?', initials: '?'));
+                              return Text(
+                                '${member.initials} ৳${entry.value.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.grey.shade600),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text('৳${total.toStringAsFixed(0)}',
                         style: const TextStyle(
-                            fontWeight: FontWeight.w600)),
-                    IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            size: 18),
-                        onPressed: () {
-                          _db.deleteCost(e.id);
-                          _load();
-                        }),
+                            fontWeight: FontWeight.bold, fontSize: 15)),
                   ]),
-            ),
-          );
-        }),
-      ]),
-    );
+                ),
+                if (cat != _categories.last && _categoryTotal(
+                    _categories[(_categories.indexOf(cat) + 1) % _categories.length]) > 0)
+                  const Divider(height: 0, indent: 48),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
+      const SizedBox(height: 24),
+    ]);
   }
 }
 
@@ -2051,7 +2580,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   int? _selectedMemberId;
   String _method                = 'Cash';
   List<Payment> _entries        = [];
-  MonthSummary? _summary;       // for showing due amounts per member
+  MonthSummary? _summary;
+  bool _showSummary             = false;
 
   static const _methods = ['Cash', 'bKash', 'Nagad', 'Bank', 'Other'];
 
@@ -2084,7 +2614,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     });
   }
 
-  // Get due amount for a specific member
   String _dueLabel(int memberId) {
     final s = _summary;
     if (s == null) return '';
@@ -2105,9 +2634,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         orElse: () => MemberSummary(
             member: Member(), totalMeals: 0, mealCost: 0,
             otherCosts: 0, totalCost: 0, paid: 0, due: 0));
-    if (ms.hasDue) {
-      _amountCtrl.text = ms.due.toStringAsFixed(0);
-    }
+    if (ms.hasDue) _amountCtrl.text = ms.due.toStringAsFixed(0);
   }
 
   void _save() {
@@ -2135,193 +2662,422 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _amountCtrl.clear();
     _noteCtrl.clear();
     _load();
-    ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment recorded!')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Payment recorded!')));
   }
+
+  // ── Summary helpers ──────────────────────────────────────
+
+  double _totalPaidByMember(int memberId) => _entries
+      .where((e) => e.memberId == memberId)
+      .fold(0.0, (s, e) => s + e.amount);
+
+  double _totalPaidByMethod(String method) => _entries
+      .where((e) => e.method == method)
+      .fold(0.0, (s, e) => s + e.amount);
+
+  double get _grandTotalPaid =>
+      _entries.fold(0.0, (s, e) => s + e.amount);
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Payments')),
-      body: ListView(padding: const EdgeInsets.all(14), children: [
-
-        // ── Who still owes? status cards ──────────────────
-        if (_summary != null && _summary!.members.isNotEmpty) ...[
-          Text('Current status',
-              style: theme.textTheme.titleSmall?.copyWith(color: Colors.grey)),
-          const SizedBox(height: 8),
-          ..._summary!.members.map((ms) {
-            final color = ms.hasDue ? Colors.red
-                : ms.isOverpaid ? Colors.blue : Colors.green;
-            final label = ms.hasDue
-                ? 'Owes ৳${ms.due.toStringAsFixed(0)}'
-                : ms.isOverpaid
-                ? 'Advance ৳${ms.due.abs().toStringAsFixed(0)}'
-                : 'Settled';
-            final sub = 'Meal ৳${ms.mealCost.toStringAsFixed(0)}'
-                ' + Costs ৳${ms.otherCosts.toStringAsFixed(0)}'
-                ' − Paid ৳${ms.paid.toStringAsFixed(0)}';
-            return Card(
-              margin: const EdgeInsets.only(bottom: 6),
-              child: ListTile(
-                dense: true,
-                leading: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: color.withOpacity(0.15),
-                  child: Text(ms.member.initials,
-                      style: TextStyle(
-                          fontSize: 11, color: color,
-                          fontWeight: FontWeight.bold)),
-                ),
-                title: Text(ms.member.name,
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w500)),
-                subtitle: Text(sub,
-                    style: const TextStyle(fontSize: 11)),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(label,
-                        style: TextStyle(
-                            color: color,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13)),
-                    if (ms.hasDue)
-                      GestureDetector(
-                        onTap: () {
-                          setState(() => _selectedMemberId = ms.member.id);
-                          _prefillDue();
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(top: 2),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(99),
-                          ),
-                          child: const Text('+ Record',
-                              style: TextStyle(
-                                  fontSize: 10, color: Colors.red)),
-                        ),
-                      ),
-                  ],
-                ),
+      appBar: AppBar(
+        title: const Text('Payments'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              icon: Icon(
+                _showSummary ? Icons.list_rounded : Icons.bar_chart_rounded,
+                size: 18,
               ),
-            );
-          }),
-          const SizedBox(height: 14),
-        ],
-
-        // ── Add payment form ───────────────────────────────
-        Text('Record payment',
-            style: theme.textTheme.titleSmall?.copyWith(color: Colors.grey)),
-        const SizedBox(height: 8),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: [
-              if (_members.isNotEmpty)
-                DropdownButtonFormField<int>(
-                  value: _selectedMemberId,
-                  decoration: const InputDecoration(labelText: 'Member'),
-                  items: _members.map((m) => DropdownMenuItem(
-                    value: m.id,
-                    child: Text('${m.name}${_dueLabel(m.id)}'),
-                  )).toList(),
-                  onChanged: (v) {
-                    setState(() => _selectedMemberId = v);
-                    _prefillDue(); // auto-fill the amount they owe
-                  },
-                ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _amountCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Amount (৳)'),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: _method,
-                decoration: const InputDecoration(labelText: 'Payment method'),
-                items: _methods
-                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                    .toList(),
-                onChanged: (v) => setState(() => _method = v ?? 'Cash'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _noteCtrl,
-                decoration: const InputDecoration(labelText: 'Note (optional)'),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                    onPressed: _save,
-                    child: const Text('Record payment')),
-              ),
-            ]),
-          ),
-        ),
-
-        // ── Payment log ───────────────────────────────────
-        const SizedBox(height: 16),
-        Text('Payment log',
-            style: theme.textTheme.titleSmall?.copyWith(color: Colors.grey)),
-        const SizedBox(height: 8),
-        if (_entries.isEmpty)
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Center(
-                  child: Text('No payments recorded yet.',
-                      style: TextStyle(color: Colors.grey))),
+              label: Text(_showSummary ? 'Entry' : 'Summary'),
+              onPressed: () => setState(() => _showSummary = !_showSummary),
             ),
           ),
-        ..._entries.map((e) {
-          final member = _members.firstWhere(
-                  (m) => m.id == e.memberId,
-              orElse: () => Member(name: 'Unknown', initials: '?'));
+        ],
+      ),
+      body: _showSummary ? _buildSummaryView() : _buildEntryView(),
+    );
+  }
+
+  // ── ENTRY VIEW (original) ────────────────────────────────
+  Widget _buildEntryView() {
+    final theme = Theme.of(context);
+    return ListView(padding: const EdgeInsets.all(14), children: [
+
+      // Who still owes — status cards
+      if (_summary != null && _summary!.members.isNotEmpty) ...[
+        Text('Current status',
+            style: theme.textTheme.titleSmall?.copyWith(color: Colors.grey)),
+        const SizedBox(height: 8),
+        ..._summary!.members.map((ms) {
+          final color = ms.hasDue ? Colors.red
+              : ms.isOverpaid ? Colors.blue : Colors.green;
+          final label = ms.hasDue
+              ? 'Owes ৳${ms.due.toStringAsFixed(0)}'
+              : ms.isOverpaid
+              ? 'Advance ৳${ms.due.abs().toStringAsFixed(0)}'
+              : 'Settled';
+          final sub = 'Meal ৳${ms.mealCost.toStringAsFixed(0)}'
+              ' + Costs ৳${ms.otherCosts.toStringAsFixed(0)}'
+              ' − Paid ৳${ms.paid.toStringAsFixed(0)}';
           return Card(
             margin: const EdgeInsets.only(bottom: 6),
             child: ListTile(
+              dense: true,
               leading: CircleAvatar(
                 radius: 18,
-                backgroundColor: Colors.green.withOpacity(0.12),
-                child: Text(member.initials,
-                    style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.green,
+                backgroundColor: color.withOpacity(0.15),
+                child: Text(ms.member.initials,
+                    style: TextStyle(fontSize: 11, color: color,
                         fontWeight: FontWeight.bold)),
               ),
-              title: Text(member.name,
-                  style: const TextStyle(fontWeight: FontWeight.w500)),
-              subtitle: Text(
-                '${e.method} · ${e.date.day}/${e.date.month}/${e.date.year}'
-                    '${e.note.isNotEmpty ? " · ${e.note}" : ""}',
-                style: const TextStyle(fontSize: 12),
+              title: Text(ms.member.name,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              subtitle: Text(sub, style: const TextStyle(fontSize: 11)),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+                  if (ms.hasDue)
+                    GestureDetector(
+                      onTap: () {
+                        setState(() => _selectedMemberId = ms.member.id);
+                        _prefillDue();
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: const Text('+ Record',
+                            style: TextStyle(fontSize: 10, color: Colors.red)),
+                      ),
+                    ),
+                ],
               ),
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('৳${e.amount.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
-                        fontSize: 15)),
-                IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    onPressed: () {
-                      _db.deletePayment(e.id);
-                      _load();
-                    }),
-              ]),
             ),
           );
         }),
-      ]),
-    );
+        const SizedBox(height: 14),
+      ],
+
+      // Record payment form
+      Text('Record payment',
+          style: theme.textTheme.titleSmall?.copyWith(color: Colors.grey)),
+      const SizedBox(height: 8),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(children: [
+            if (_members.isNotEmpty)
+              DropdownButtonFormField<int>(
+                value: _selectedMemberId,
+                decoration: const InputDecoration(labelText: 'Member'),
+                items: _members.map((m) => DropdownMenuItem(
+                  value: m.id,
+                  child: Text('${m.name}${_dueLabel(m.id)}'),
+                )).toList(),
+                onChanged: (v) {
+                  setState(() => _selectedMemberId = v);
+                  _prefillDue();
+                },
+              ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _amountCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Amount (৳)'),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: _method,
+              decoration: const InputDecoration(labelText: 'Payment method'),
+              items: _methods
+                  .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                  .toList(),
+              onChanged: (v) => setState(() => _method = v ?? 'Cash'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _noteCtrl,
+              decoration: const InputDecoration(labelText: 'Note (optional)'),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                  onPressed: _save, child: const Text('Record payment')),
+            ),
+          ]),
+        ),
+      ),
+
+      // Payment log
+      const SizedBox(height: 16),
+      Text('Payment log',
+          style: theme.textTheme.titleSmall?.copyWith(color: Colors.grey)),
+      const SizedBox(height: 8),
+      if (_entries.isEmpty)
+        const Card(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(child: Text('No payments recorded yet.',
+                style: TextStyle(color: Colors.grey))),
+          ),
+        ),
+      ..._entries.map((e) {
+        final member = _members.firstWhere(
+                (m) => m.id == e.memberId,
+            orElse: () => Member(name: 'Unknown', initials: '?'));
+        return Card(
+          margin: const EdgeInsets.only(bottom: 6),
+          child: ListTile(
+            leading: CircleAvatar(
+              radius: 18,
+              backgroundColor: Colors.green.withOpacity(0.12),
+              child: Text(member.initials,
+                  style: const TextStyle(
+                      fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold)),
+            ),
+            title: Text(member.name,
+                style: const TextStyle(fontWeight: FontWeight.w500)),
+            subtitle: Text(
+              '${e.method} · ${e.date.day}/${e.date.month}/${e.date.year}'
+                  '${e.note.isNotEmpty ? " · ${e.note}" : ""}',
+              style: const TextStyle(fontSize: 12),
+            ),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('৳${e.amount.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green, fontSize: 15)),
+              IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  onPressed: () { _db.deletePayment(e.id); _load(); }),
+            ]),
+          ),
+        );
+      }),
+    ]);
+  }
+
+  // ── SUMMARY VIEW ─────────────────────────────────────────
+  Widget _buildSummaryView() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final s = _summary;
+
+    return ListView(padding: const EdgeInsets.all(14), children: [
+
+      // ── Totals banner ──
+      Card(
+        color: const Color(0xFF1a1a2e),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Total collected',
+                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+                Text('৳${_grandTotalPaid.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 26,
+                        fontWeight: FontWeight.bold)),
+              ]),
+              if (s != null)
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  const Text('Still outstanding',
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  Text('৳${s.totalDue.toStringAsFixed(0)}',
+                      style: TextStyle(
+                          color: s.totalDue > 0
+                              ? Colors.red.shade300
+                              : Colors.green.shade300,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold)),
+                ]),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
+
+      // ── Per-member payment summary ──
+      Text('BY MEMBER',
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: Colors.grey, letterSpacing: 1)),
+      const SizedBox(height: 8),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Column(
+            children: _members.map((m) {
+              final paid = _totalPaidByMember(m.id);
+              final ms = s?.members.firstWhere(
+                      (ms) => ms.member.id == m.id,
+                  orElse: () => MemberSummary(
+                      member: m, totalMeals: 0, mealCost: 0,
+                      otherCosts: 0, totalCost: 0, paid: 0, due: 0));
+              final due = ms?.due ?? 0;
+              final statusColor = (ms?.hasDue ?? false)
+                  ? Colors.red
+                  : (ms?.isOverpaid ?? false)
+                  ? Colors.blue
+                  : Colors.green;
+              final statusLabel = (ms?.hasDue ?? false)
+                  ? '৳${due.toStringAsFixed(0)} due'
+                  : (ms?.isOverpaid ?? false)
+                  ? '+৳${due.abs().toStringAsFixed(0)} advance'
+                  : 'Settled ✓';
+
+              // Per-method breakdown for this member
+              final methodAmounts = <String, double>{};
+              for (final e in _entries.where((e) => e.memberId == m.id)) {
+                methodAmounts[e.method] =
+                    (methodAmounts[e.method] ?? 0) + e.amount;
+              }
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: statusColor.withOpacity(0.15),
+                        child: Text(m.initials,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: statusColor,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(m.name,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600, fontSize: 14)),
+                            if (ms != null)
+                              Text(
+                                'Cost ৳${ms.totalCost.toStringAsFixed(0)}'
+                                    ' · Paid ৳${paid.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                    fontSize: 11, color: Colors.grey.shade600),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: Text(statusLabel,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: statusColor,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                    ]),
+                    if (methodAmounts.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      // Progress bar: paid vs total cost
+                      if (ms != null && ms.totalCost > 0)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: (paid / ms.totalCost).clamp(0.0, 1.0),
+                            minHeight: 5,
+                            color: statusColor,
+                            backgroundColor: isDark
+                                ? Colors.white.withOpacity(0.08)
+                                : Colors.black.withOpacity(0.06),
+                          ),
+                        ),
+                      const SizedBox(height: 6),
+                      // Payment method chips
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: methodAmounts.entries.map((entry) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(
+                                  isDark ? 0.15 : 0.10),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              '${entry.key} ৳${entry.value.toStringAsFixed(0)}',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.green.shade700),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
+
+      // ── By payment method ──
+      Text('BY METHOD',
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: Colors.grey, letterSpacing: 1)),
+      const SizedBox(height: 8),
+      Card(
+        child: Column(
+          children: _methods.map((method) {
+            final total = _totalPaidByMethod(method);
+            if (total == 0) return const SizedBox.shrink();
+            final count = _entries.where((e) => e.method == method).length;
+            return ListTile(
+              dense: true,
+              leading: Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.payments_outlined,
+                    size: 18, color: Colors.green),
+              ),
+              title: Text(method,
+                  style: const TextStyle(fontWeight: FontWeight.w500)),
+              subtitle: Text('$count transaction${count > 1 ? "s" : ""}',
+                  style: const TextStyle(fontSize: 11)),
+              trailing: Text('৳${total.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15)),
+            );
+          }).toList(),
+        ),
+      ),
+      const SizedBox(height: 24),
+    ]);
   }
 }
 
