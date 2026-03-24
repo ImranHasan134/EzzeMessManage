@@ -360,6 +360,9 @@ class MonthSummary {
   final int totalMeals;
   final double mealRate;
   final double totalPaid;
+  final double totalOtherCosts;  // ← new
+  final double bazarBudget;      // ← new  (totalPaid − totalOtherCosts)
+  final double bazarRemaining;   // ← new  (bazarBudget − totalBazar)
   final double totalDue;
   final List<MemberSummary> members;
 
@@ -368,6 +371,9 @@ class MonthSummary {
     required this.totalMeals,
     required this.mealRate,
     required this.totalPaid,
+    required this.totalOtherCosts,
+    required this.bazarBudget,
+    required this.bazarRemaining,
     required this.totalDue,
     required this.members,
   });
@@ -380,9 +386,13 @@ MonthSummary computeSummary(String monthId) {
   final costs    = _db.getCostsByMonth(monthId);
   final payments = _db.getPaymentsByMonth(monthId);
 
-  final totalBazar  = bazar.fold(0.0, (s, b) => s + b.amount);
-  final totalMeals  = meals.fold(0,   (s, m) => s + m.count);
-  final mealRate    = totalMeals > 0 ? totalBazar / totalMeals : 0.0;
+  final totalBazar      = bazar.fold(0.0, (s, b) => s + b.amount);
+  final totalMeals      = meals.fold(0,   (s, m) => s + m.count);
+  final mealRate        = totalMeals > 0 ? totalBazar / totalMeals : 0.0;
+  final totalPaid       = payments.fold(0.0, (s, p) => s + p.amount);
+  final totalOtherCosts = costs.fold(0.0, (s, c) => s + c.amount);  // ← new
+  final bazarBudget     = totalPaid - totalOtherCosts;               // ← new
+  final bazarRemaining  = bazarBudget - totalBazar;                  // ← new
 
   final summaries = members.map((member) {
     final mCount = meals
@@ -408,12 +418,15 @@ MonthSummary computeSummary(String monthId) {
   }).toList();
 
   return MonthSummary(
-    totalBazar: totalBazar,
-    totalMeals: totalMeals,
-    mealRate: mealRate,
-    totalPaid: payments.fold(0.0, (s, p) => s + p.amount),
-    totalDue: summaries.where((s) => s.hasDue).fold(0.0, (s, m) => s + m.due),
-    members: summaries,
+    totalBazar:      totalBazar,
+    totalMeals:      totalMeals,
+    mealRate:        mealRate,
+    totalPaid:       totalPaid,
+    totalOtherCosts: totalOtherCosts,
+    bazarBudget:     bazarBudget,
+    bazarRemaining:  bazarRemaining,
+    totalDue:        summaries.where((s) => s.hasDue).fold(0.0, (s, m) => s + m.due),
+    members:         summaries,
   );
 }
 
@@ -954,6 +967,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSummaryCards(MonthSummary s) {
+    final remaining = s.bazarRemaining;
+    final remainingColor = remaining >= 0 ? Colors.green : Colors.red;
+
     return Column(children: [
       Row(children: [
         Expanded(
@@ -967,21 +983,23 @@ class _HomeScreenState extends State<HomeScreen> {
       const SizedBox(height: 8),
       Row(children: [
         Expanded(
-            child: _metricCard('Bazar cost',
+            child: _metricCard('Bazar spent',
                 '৳${s.totalBazar.toStringAsFixed(0)}',
                 widget.monthId)),
         const SizedBox(width: 8),
         Expanded(
-            child: _metricCard('Total paid',
-                '৳${s.totalPaid.toStringAsFixed(0)}', 'collected',
-                color: Colors.green)),
+            child: _metricCard('Bazar budget',
+                '৳${s.bazarBudget.toStringAsFixed(0)}',
+                'paid − fixed costs')),
       ]),
       const SizedBox(height: 8),
       _metricCard(
-          'Outstanding',
-          '৳${s.totalDue.toStringAsFixed(0)}',
-          '${s.members.where((m) => m.hasDue).length} members owe',
-          color: s.totalDue > 0 ? Colors.red : Colors.green,
+          'Bazar remaining',
+          '৳${remaining.abs().toStringAsFixed(0)}',
+          remaining >= 0
+              ? 'surplus in the pool'
+              : 'pool is overspent',
+          color: remainingColor,
           full: true),
     ]);
   }
