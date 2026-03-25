@@ -3350,7 +3350,7 @@ class _Stepper extends StatelessWidget {
           onPressed: value > 0 ? () => onChanged(value - 1) : null,
           icon: Icon(Icons.remove_rounded, color: value > 0 ? theme.colorScheme.primary : Colors.grey),
           splashRadius: 20,
-        ),
+        ), 
         SizedBox(
             width: 24,
             child: Text('$value',
