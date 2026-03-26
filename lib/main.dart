@@ -476,14 +476,14 @@ class ExportService {
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.all(36),
       build: (ctx) => [
-        pw.Text('Mess Report — ${_formatMonthId(monthId)}',
+        pw.Text('Mess Report : ${_formatMonthId(monthId)}',
             style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 6),
         pw.Text(
-          'Meal rate: ৳${summary.mealRate.toStringAsFixed(2)}  |  '
+          'Meal rate: ${summary.mealRate.toStringAsFixed(2)} Tk  |  '
               'Total meals: ${summary.totalMeals}  |  '
-              'Bazar: ৳${summary.totalBazar.toStringAsFixed(0)}  |  '
-              'Bazar remaining: ৳${summary.bazarRemaining.toStringAsFixed(0)}',
+              'Bazar: ${summary.totalBazar.toStringAsFixed(0)} Tk  |  '
+              'Bazar remaining: ${summary.bazarRemaining.toStringAsFixed(0)} Tk',
           style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
         ),
         pw.Divider(height: 24),
@@ -493,18 +493,18 @@ class ExportService {
             pw.Text(ms.member.name,
                 style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 4),
-            _pdfRow('Meals (${ms.totalMeals} × ৳${summary.mealRate.toStringAsFixed(2)})',
-                '৳${ms.mealCost.toStringAsFixed(0)}'),
-            _pdfRow('Other costs', '৳${ms.otherCosts.toStringAsFixed(0)}'),
-            _pdfRow('Total cost', '৳${ms.totalCost.toStringAsFixed(0)}', bold: true),
-            _pdfRow('Paid', '৳${ms.paid.toStringAsFixed(0)}'),
+            _pdfRow('Meals (${ms.totalMeals} × ${summary.mealRate.toStringAsFixed(2)} Tk)',
+                '${ms.mealCost.toStringAsFixed(0)} Tk'),
+            _pdfRow('Other costs', '${ms.otherCosts.toStringAsFixed(0)} Tk'),
+            _pdfRow('Total cost', '${ms.totalCost.toStringAsFixed(0)} Tk', bold: true),
+            _pdfRow('Paid', '${ms.paid.toStringAsFixed(0)} Tk'),
             _pdfRow(
               ms.hasDue
                   ? 'Due'
                   : ms.isOverpaid
                   ? 'Advance'
                   : 'Settled',
-              '৳${ms.due.abs().toStringAsFixed(0)}',
+              '${ms.due.abs().toStringAsFixed(0)} Tk',
               bold: true,
               color: ms.hasDue
                   ? PdfColors.red700
@@ -3001,11 +3001,11 @@ class OtherCostScreen extends StatefulWidget {
 }
 
 class _OtherCostScreenState extends State<OtherCostScreen> {
-  final _amountCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
+  // One controller per category
+  final Map<String, TextEditingController> _amountCtrls = {};
   List<Member> _members = [];
   int? _selectedMemberId;
-  String _category = 'Rent';
   List<OtherCost> _entries = [];
   bool _showSummary = false;
 
@@ -3026,13 +3026,22 @@ class _OtherCostScreenState extends State<OtherCostScreen> {
   @override
   void initState() {
     super.initState();
+    for (final cat in _categories) {
+      _amountCtrls[cat] = TextEditingController();
+    }
     _load();
+    // Ensure member is selected after first load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_selectedMemberId == null && _members.isNotEmpty) {
+        setState(() => _selectedMemberId = _members.first.id);
+      }
+    });
   }
 
   @override
   void dispose() {
-    _amountCtrl.dispose();
     _noteCtrl.dispose();
+    for (final ctrl in _amountCtrls.values) ctrl.dispose();
     super.dispose();
   }
 
@@ -3042,43 +3051,55 @@ class _OtherCostScreenState extends State<OtherCostScreen> {
       ..sort((a, b) => b.date.compareTo(a.date));
     setState(() {
       _members = members;
-      if (_selectedMemberId == null || !members.any((m) => m.id == _selectedMemberId)) {
-        _selectedMemberId = members.isNotEmpty ? members.first.id : null;
+      if (members.isNotEmpty &&
+          (_selectedMemberId == null ||
+              !members.any((m) => m.id == _selectedMemberId))) {
+        _selectedMemberId = members.first.id;
       }
       _entries = entries;
     });
   }
 
   void _save() {
-    final memberId = _selectedMemberId;
-    final amount = double.tryParse(_amountCtrl.text.trim());
+    // Auto-select first member if somehow still null
+    final memberId = _selectedMemberId ?? (_members.isNotEmpty ? _members.first.id : null);
     if (memberId == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Please select a member first'),
+          content: const Text('No members found. Add members in Settings.'),
           backgroundColor: const Color(0xFFDC2626),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
       return;
     }
-    if (amount == null || amount <= 0) {
+
+    int saved = 0;
+    for (final cat in _categories) {
+      final amount = double.tryParse(_amountCtrls[cat]!.text.trim());
+      if (amount != null && amount > 0) {
+        _db.saveCost(OtherCost(
+            memberId: memberId,
+            amount: amount,
+            category: cat,
+            note: _noteCtrl.text.trim(),
+            monthId: widget.monthId));
+        saved++;
+      }
+    }
+
+    if (saved == 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Please enter a valid amount'),
-          backgroundColor: const Color(0xFFDC2626),
+          content: const Text('Enter at least one amount'),
+          backgroundColor: Colors.orange.shade800,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
       return;
     }
-    _db.saveCost(OtherCost(
-        memberId: memberId,
-        amount: amount,
-        category: _category,
-        note: _noteCtrl.text.trim(),
-        monthId: widget.monthId));
-    _amountCtrl.clear();
+
+    for (final ctrl in _amountCtrls.values) ctrl.clear();
     _noteCtrl.clear();
     _load();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Cost added!'),
+        content: Text('$saved cost${saved > 1 ? "s" : ""} added!'),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
   }
@@ -3146,6 +3167,7 @@ class _OtherCostScreenState extends State<OtherCostScreen> {
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Column(children: [
+            // Member selector
             if (_members.isNotEmpty)
               DropdownButtonFormField<int>(
                 value: _selectedMemberId,
@@ -3161,32 +3183,63 @@ class _OtherCostScreenState extends State<OtherCostScreen> {
                     .toList(),
                 onChanged: (v) => setState(() => _selectedMemberId = v),
               ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _category,
-              decoration: const InputDecoration(labelText: 'Category'),
-              icon: const Icon(Icons.expand_more_rounded, size: 20),
-              items: _categories
-                  .map((c) => DropdownMenuItem(
-                value: c,
-                child: Text(c,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w500, fontSize: 14)),
-              ))
-                  .toList(),
-              onChanged: (v) => setState(() => _category = v ?? 'Rent'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _amountCtrl,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              decoration: const InputDecoration(labelText: 'Amount (৳)', prefixText: '৳ '),
+            const SizedBox(height: 18),
+            // All categories in one go
+            ...List.generate(_categories.length, (i) {
+              final cat = _categories[i];
+              final icon = _categoryIcons[cat] ?? Icons.receipt_rounded;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon,
+                        color: theme.colorScheme.onPrimaryContainer, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      cat,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 110,
+                    child: TextField(
+                      controller: _amountCtrls[cat],
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700),
+                      decoration: const InputDecoration(
+                        hintText: '0',
+                        prefixText: '৳ ',
+                        contentPadding: EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 10),
+                      ),
+                    ),
+                  ),
+                ]),
+              );
+            }),
+            const SizedBox(height: 4),
+            Divider(
+              color: isDark
+                  ? Colors.white.withOpacity(0.06)
+                  : const Color(0xFFE7E5E4),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _noteCtrl,
-              decoration: const InputDecoration(labelText: 'Note (optional)'),
+              decoration: const InputDecoration(
+                  labelText: 'Note (applies to all entries above)'),
             ),
             const SizedBox(height: 20),
             SizedBox(
@@ -3194,7 +3247,7 @@ class _OtherCostScreenState extends State<OtherCostScreen> {
               child: FilledButton.icon(
                 onPressed: _save,
                 icon: const Icon(Icons.add_rounded, size: 20),
-                label: const Text('Add Cost'),
+                label: const Text('Add Costs'),
               ),
             ),
           ]),
@@ -3235,24 +3288,30 @@ class _OtherCostScreenState extends State<OtherCostScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('${member.name} · ${e.category}',
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${e.date.day}/${e.date.month}'
-                          '${e.note.isNotEmpty ? " · ${e.note}" : ""}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? const Color(0xFF78716C) : const Color(0xFFA8A29E),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ]),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${member.name} · ${e.category}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 13)),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${e.date.day}/${e.date.month}'
+                              '${e.note.isNotEmpty ? " · ${e.note}" : ""}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? const Color(0xFF78716C)
+                                : const Color(0xFFA8A29E),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ]),
                 ),
                 const SizedBox(width: 8),
                 Text('৳${e.amount.toStringAsFixed(0)}',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 14)),
                 const SizedBox(width: 4),
                 IconButton(
                   icon: const Icon(Icons.delete_outline_rounded, size: 18),
@@ -3275,7 +3334,9 @@ class _OtherCostScreenState extends State<OtherCostScreen> {
             child: Text(
               'No other costs recorded yet.',
               style: TextStyle(
-                color: isDark ? const Color(0xFF78716C) : const Color(0xFFA8A29E),
+                color: isDark
+                    ? const Color(0xFF78716C)
+                    : const Color(0xFFA8A29E),
                 fontSize: 14,
               ),
             ),
