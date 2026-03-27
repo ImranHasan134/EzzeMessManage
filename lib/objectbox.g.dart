@@ -14,7 +14,11 @@ import 'package:objectbox/internal.dart'
 import 'package:objectbox/objectbox.dart' as obx;
 import 'package:objectbox_flutter_libs/objectbox_flutter_libs.dart';
 
-import 'main.dart';
+import 'data/models/bazar_entry.dart';
+import 'data/models/meal_entry.dart';
+import 'data/models/member.dart';
+import 'data/models/other_cost.dart';
+import 'data/models/payment.dart';
 
 export 'package:objectbox/objectbox.dart'; // so that callers only have to import this file
 
